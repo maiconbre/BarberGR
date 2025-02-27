@@ -57,36 +57,43 @@ const AppointmentCardNew: React.FC<Props> = ({ appointment, onDelete, onToggleSt
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
       >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className={`w-2 h-2 rounded-full ${statusColors[appointment.status]}`} />
-            <div>
-              <h3 className="text-white font-medium">{appointment.clientName}</h3>
-              <div className="flex items-center gap-2">
-                <p className="text-sm text-gray-400">
-                  {appointment.status === 'pending' ? 'Pendente' : 'Concluído'}
-                </p>
-                <span className="text-sm text-gray-400">•</span>
-                <p className="text-sm text-gray-400">
-                  {appointment.time}{' '}
-                  {(() => {
-                    const now = new Date();
-                    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().split('T')[0];
-                    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-                    const tomorrowStr = tomorrow.toISOString().split('T')[0];
-    
-                    if (appointment.date === today) {
-                      return <span className="text-right ml-24 text-green-300 text-xs">hoje</span>;
-                    } else if (appointment.date === tomorrowStr) {
-                      return <span className="text-right ml-24 text-yellow-200 text-xs">amanhã</span>;
-                    }
-                    return null;
-                  })()}
-                </p>
+        <div className="flex flex-col space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div>
+                <h3 className="text-white font-medium text-lg">{appointment.clientName}</h3>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className={`w-2 h-2 rounded-full ${statusColors[appointment.status]}`} />
+                  <p className="text-sm text-gray-400">
+                    {appointment.time}{' '}
+                    {(() => {
+                      const now = new Date();
+                      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().split('T')[0];
+                      const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+                      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+      
+                      if (appointment.date === today) {
+                        return <span className="text-right mx-2 text-green-300 text-xs">hoje</span>;
+                      } else if (appointment.date === tomorrowStr) {
+                        return <span className="text-right mx-2 text-yellow-200 text-xs">amanhã</span>;
+                      }
+                      return null;
+                    })()}
+                  </p>
+                </div>
               </div>
+            </div>
+            <div className="flex flex-col items-end">
+              <span className="text-[#F0B35B] font-semibold text-lg">
+                R$ {(typeof appointment.price === 'number' && !isNaN(appointment.price)) ? appointment.price.toFixed(2) : '0.00'}
+              </span>
+              <span className={`text-sm ${appointment.status === 'completed' ? 'text-green-500' : 'text-yellow-500'}`}>
+                {appointment.status === 'completed' ? 'Concluído' : 'Pendente'}
+              </span>
             </div>
           </div>
           <motion.div
+            className="mt-2 flex justify-end"
             animate={{ rotate: isOpen ? 180 : 0 }}
             transition={{ duration: 0.3 }}
           >
@@ -119,13 +126,13 @@ const AppointmentCardNew: React.FC<Props> = ({ appointment, onDelete, onToggleSt
               </div>
               <div className="flex items-center text-[#F0B35B]">
                 <FaMoneyBill className="mr-2" />
-                <span>R$ {appointment.price.toFixed(2)}</span>
+                <span>R$ {(typeof appointment.price === 'number' && !isNaN(appointment.price)) ? appointment.price.toFixed(2) : '0.00'}</span>
               </div>
               <div className="flex items-center text-gray-400">
                 <FaUser className="mr-2" />
                 <span>{appointment.barberName}</span>
               </div>
-
+      
               <div className="flex justify-end space-x-2 pt-2">
                 <motion.button
                   whileHover={{ scale: 1.05 }}
@@ -157,7 +164,7 @@ const AppointmentCardNew: React.FC<Props> = ({ appointment, onDelete, onToggleSt
             </div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>  
     </motion.div>
   );
 };

@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [formData, setFormData] = useState({
@@ -13,27 +11,56 @@ const LoginPage: React.FC = () => {
     password: '',
     rememberMe: false
   });
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
-
+  
     try {
-      const success = await login(formData.username, formData.password, formData.rememberMe);
-      if (success) {
-        navigate('/dashboard');
-      } else {
-        setError('Credenciais inválidas');
+      // Validate form data
+      if (!formData.username.trim() || !formData.password.trim()) {
+        setError('Por favor, preencha todos os campos');
+        return;
       }
+  
+      // Make API call for authentication
+      const response = await fetch('http://localhost:3000/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          email: formData.username,
+          password: formData.password
+        })
+      });
+  
+      const data = await response.json();
+  
+      if (!response.ok) {
+        throw new Error(data.message || 'Erro ao validar autenticação');
+      }
+  
+      // Store token based on user preference
+      const token = data.token;
+      if (formData.rememberMe) {
+        localStorage.setItem('token', token);
+      } else {
+        sessionStorage.setItem('token', token);
+      }
+  
+      // Navigate to dashboard after successful login
+      navigate('/dashboard');
     } catch (err) {
-      console.error('Error during login:', err);
-      setError('Erro ao fazer login');
+      // Clear tokens on error
+      localStorage.removeItem('token');
+      sessionStorage.removeItem('token');
+      setError(err instanceof Error ? err.message : 'Erro ao validar autenticação');
     } finally {
       setIsLoading(false);
     }
   };
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0D121E] py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8 bg-[#1A1F2E] p-8 rounded-lg shadow-xl">

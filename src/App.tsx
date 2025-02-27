@@ -10,7 +10,6 @@ import ContactPage from './pages/ContactPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
-import ProtectedRoute from './components/ProtectedRoute';
 
 const AppContent = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -35,12 +34,7 @@ const AppContent = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <DashboardPage />
-            </ProtectedRoute>
-          }
+          path="/dashboard" element={<DashboardPage />}
         />
       </Routes>
       <BookingModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />

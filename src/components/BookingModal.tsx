@@ -76,23 +76,47 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose }) => {
       setError('Por favor, selecione um serviço');
       return;
     }
+    if (!formData.name.trim()) {
+      setError('Por favor, digite seu nome');
+      return;
+    }
     setIsLoading(true);
     setError('');
 
     try {
       const formattedDate = formData.date;
 
+      if (!formData.service) {
+        throw new Error('O serviço é obrigatório');
+      }
+
+      // Monta os dados do agendamento
       const appointmentData = {
-        clientName: formData.name,
-        serviceName: formData.service + (formData.barba ? ', Barba' : '') + (formData.sobrancelha ? ', Sobrancelha' : ''),
+        clientName: formData.name.trim(),
+        serviceName: formData.service,
         date: formattedDate,
         time: formData.time,
-        barberId: formData.barber === 'Maicon' ? '01' : '02',
+        barberId: formData.barberId,
         barberName: formData.barber,
-        price: parseFloat(getServicePrice().replace('R$ ', ''))
+        price: parseFloat(getServicePrice().replace('R$ ', '')),
+        status: 'pending',
+        extras: []
       };
 
-      const response = await fetch('https://barber-backend-spm8.onrender.com/api/appointments', {
+      if (formData.barba) (appointmentData.extras as string[]).push('Barba');
+      if (formData.sobrancelha) (appointmentData.extras as string[]).push('Sobrancelha');
+
+      // Atualiza o serviceName com os extras
+      if (appointmentData.extras.length > 0) {
+        appointmentData.serviceName = `${formData.service}, ${appointmentData.extras.join(', ')}`;
+      }
+
+      // Validação adicional antes de enviar
+      if (!appointmentData.serviceName || appointmentData.serviceName.trim() === '') {
+        throw new Error('O serviço é obrigatório');
+      }
+
+      const response = await fetch('http://localhost:3000/api/appointments', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -135,7 +159,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose }) => {
 
     } catch (err) {
       console.error('Error saving appointment:', err);
-      setError('Erro ao salvar agendamento');
+      setError('Erro ao salvar agendamento. Por favor, tente novamente.');
     } finally {
       setIsLoading(false);
     }
