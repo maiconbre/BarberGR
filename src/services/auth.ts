@@ -1,3 +1,5 @@
+import api from './api';
+
 interface User {
   id: string;
   email: string;
@@ -5,42 +7,58 @@ interface User {
   name: string;
 }
 
-export async function authenticateUser(email: string, password: string): Promise<User> {
-  // Mock admin credentials
-  const mockUsers = [
-    {
-      id: '1',
-      email: 'admin',
-      password: '123456',
-      role: 'admin',
-      name: 'Admin'
-    },
-    {
-      id: '2',
-      email: 'maicon@grbarber.com',
-      password: '123456',
-      role: 'barber',
-      name: 'Maicon'
-    },
-    {
-      id: '3',
-      email: 'brendon@grbarber.com',
-      password: '123456',
-      role: 'barber',
-      name: 'Brendon'
+export async function authenticateUser(username: string, password: string): Promise<User> {
+  try {
+    console.log('Enviando requisição de login:', { username });
+    
+    const response = await api.post('/auth/login', { username, password });
+    
+    console.log('Resposta da requisição de login:', response.data);
+    
+    if (!response.data.success) {
+      throw new Error(response.data.message || 'Authentication failed');
     }
-  ];
-
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 500));
-
-  const user = mockUsers.find(u => u.email === email && u.password === password);
-
-  if (!user) {
+    
+    // Armazenar o token recebido do servidor
+    const token = response.data.data.token;
+    if (token) {
+      // Configurar o token para futuras requisições
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    }
+    
+    return response.data.data.user;
+  } catch (error) {
+    console.error('Authentication error:', error);
     throw new Error('Invalid credentials');
   }
+}
 
-  // Don't send password in the response
-  const { password: _, ...userWithoutPassword } = user;
-  return userWithoutPassword;
+export async function validateToken(token: string): Promise<{ user: User; newToken: string }> {
+  try {
+    // Configurar o token para a requisição
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    
+    // Fazer requisição para validar o token
+    const response = await api.post('/auth/validate-token');
+    
+    if (!response.data.success) {
+      throw new Error(response.data.message || 'Token validation failed');
+    }
+    
+    // Atualizar o token para futuras requisições
+    const newToken = response.data.data.token;
+    if (newToken) {
+      api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+    }
+    
+    return {
+      user: response.data.data.user,
+      newToken
+    };
+  } catch (error) {
+    console.error('Token validation error:', error);
+    // Remover o token inválido dos headers
+    delete api.defaults.headers.common['Authorization'];
+    throw new Error('Invalid or expired session');
+  }
 }

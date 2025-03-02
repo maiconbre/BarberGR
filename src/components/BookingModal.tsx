@@ -92,7 +92,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose }) => {
         price: parseFloat(getServicePrice().replace('R$ ', ''))
       };
 
-      const response = await fetch('https://barber-backend-spm8.onrender.com/api/appointments', {
+      const response = await fetch('http://localhost:3000/api/appointments/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '../contexts/AuthContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
 import { FaChartLine, FaMoneyBillWave, FaChevronDown } from 'react-icons/fa';
 import AppointmentCardNew from '../components/AppointmentCardNew';
@@ -27,30 +26,35 @@ interface ChartData {
 }
 
 const DashboardPage: React.FC = () => {
-  const { logout } = useAuth();
   const [showCompleted, setShowCompleted] = useState<boolean>(false);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [weeklyData, setWeeklyData] = useState<ChartData[]>([]);
   const [isChartExpanded, setIsChartExpanded] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Função centralizada para carregar os agendamentos, memoizada para evitar recriações desnecessárias
   const loadAppointments = useCallback(async () => {
     try {
-      const response = await fetch(`https://barber-backend-spm8.onrender.com/api/appointments`, {
+      setIsLoading(true);
+      setError(null);
+      
+      const response = await fetch(`http://localhost:3000/api/appointments`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': 'Bearer ' + localStorage.getItem('token')
+          'Accept': 'application/json'
         },
         mode: 'cors'
       });
+      
       const result = await response.json();
+      
       if (result.success) {
         const formattedAppointments = result.data
           .map((app: any) => ({
             ...app,
-            service: app.serviceName
+            service: app.serviceName || app.service
           }))
           .sort((a: Appointment, b: Appointment) => {
             const dateA = new Date(`${a.date} ${a.time}`);
@@ -58,10 +62,15 @@ const DashboardPage: React.FC = () => {
             return dateA.getTime() - dateB.getTime();
           });
         setAppointments(formattedAppointments);
+      } else {
+        setError('Falha ao carregar agendamentos');
       }
     } catch (error) {
       console.error('Error loading appointments:', error);
+      setError('Erro ao carregar agendamentos. Por favor, tente novamente.');
       setAppointments([]);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
@@ -117,12 +126,11 @@ const DashboardPage: React.FC = () => {
     if (!appointmentId) return;
     try {
       if (action === 'delete') {
-        const response = await fetch(`https://barber-backend-spm8.onrender.com/api/appointments/${appointmentId}`, {
+        const response = await fetch(`http://localhost:3000/api/appointments/${appointmentId}`, {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': 'Bearer ' + localStorage.getItem('token')
+            'Accept': 'application/json'
           },
           mode: 'cors'
         });
@@ -131,12 +139,11 @@ const DashboardPage: React.FC = () => {
         }
       } else {
         const newStatus = action === 'complete' ? 'completed' : (currentStatus === 'completed' ? 'pending' : 'completed');
-        const response = await fetch(`https://barber-backend-spm8.onrender.com/api/appointments/${appointmentId}`, {
+        const response = await fetch(`http://localhost:3000/api/appointments/${appointmentId}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': 'Bearer ' + localStorage.getItem('token')
+            'Accept': 'application/json'
           },
           mode: 'cors',
           body: JSON.stringify({ status: newStatus })
@@ -173,18 +180,34 @@ const DashboardPage: React.FC = () => {
   const { receitaHoje, ticketMedio, taxaConclusao } = calculateStats();
   const filteredAppointments = showCompleted ? appointments : appointments.filter(app => app.status !== 'completed');
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#0D121E] pt-16 flex items-center justify-center">
+        <div className="text-white text-xl">Carregando dados...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#0D121E] pt-16 flex flex-col items-center justify-center">
+        <div className="text-red-400 text-xl mb-4">{error}</div>
+        <button 
+          onClick={loadAppointments}
+          className="bg-[#F0B35B] text-black px-4 py-2 rounded-md hover:bg-[#F0B35B]/80 transition-all"
+        >
+          Tentar novamente
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#0D121E] pt-16">
       <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-semibold text-white">Painel de Controle</h1>
-          <button
-            onClick={logout}
-            className="bg-[#F0B35B] text-black px-4 py-2 rounded-md hover:bg-[#F0B35B]/80 transition-all duration-300 transform hover:scale-105"
-          >
-            Sair
-          </button>
         </div>
 
         {/* Cards de Estatísticas */}
@@ -201,100 +224,58 @@ const DashboardPage: React.FC = () => {
                   Hoje: R$ {receitaHoje.toFixed(2)}
                 </p>
               </div>
-              <div className="p-3 bg-[#F0B35B]/10 rounded-lg">
+              <div className="p-3 bg-[#F0B35B]/10 rounded-full">
                 <FaMoneyBillWave className="text-[#F0B35B] text-xl" />
               </div>
             </div>
-            <div className="mt-4 pt-4 border-t border-gray-700">
-              <p className="text-sm text-gray-400">
-                Ticket Médio: <span className="text-white">R$ {ticketMedio.toFixed(2)}</span>
-              </p>
-              <p className="text-sm text-gray-400 mt-2">
-                Taxa de Conclusão: <span className="text-white">{taxaConclusao.toFixed(1)}%</span>
-              </p>
+            <div className="mt-4">
+              <div className="flex justify-between text-xs text-gray-400 mb-1">
+                <span>Pendente</span>
+                <span>Concluído</span>
+              </div>
+              <div className="w-full bg-gray-700 rounded-full h-2.5">
+                <div
+                  className="bg-[#F0B35B] h-2.5 rounded-full"
+                  style={{ width: `${taxaConclusao}%` }}
+                ></div>
+              </div>
+              <div className="flex justify-between text-xs mt-1">
+                <span className="text-gray-400">R$ {pendingRevenue.toFixed(2)}</span>
+                <span className="text-gray-400">R$ {completedRevenue.toFixed(2)}</span>
+              </div>
             </div>
           </div>
 
           <div className="bg-gradient-to-br from-[#1A1F2E] to-[#252B3B] p-6 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300">
             <div className="flex justify-between items-start">
-              <div className="flex-1">
-                <p className="text-gray-400 text-sm mb-4">Status dos Agendamentos</p>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-yellow-500 text-xs">Pendente</p>
-                    <p className="text-2xl font-bold text-yellow-500">{pendingAppointments}</p>
-                    <p className="text-sm text-yellow-500">R$ {pendingRevenue.toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <p className="text-green-500 text-xs">Concluídos</p>
-                    <p className="text-2xl font-bold text-green-500">{completedAppointments}</p>
-                    <p className="text-sm text-green-500">R$ {completedRevenue.toFixed(2)}</p>
-                  </div>
-                </div>
+              <div>
+                <p className="text-gray-400 text-sm mb-1">Agendamentos</p>
+                <h3 className="text-2xl font-bold text-[#F0B35B] mb-2">
+                  {totalAppointments}
+                </h3>
+                <p className="text-xs text-green-400">
+                  <span className="inline-block mr-1">↑</span>
+                  Ticket Médio: R$ {ticketMedio.toFixed(2)}
+                </p>
               </div>
-              <div className="w-[120px] h-[120px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={[
-                        { name: 'Aguardando', value: pendingAppointments, color: '#FFD700' },
-                        { name: 'Concluídos', value: completedAppointments, color: '#4CAF50' }
-                      ]}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={35}
-                      outerRadius={55}
-                      paddingAngle={5}
-                      dataKey="value"
-                      onClick={(data) => {
-                        const percentage = ((data.value / totalAppointments) * 100).toFixed(1);
-                        alert(`${data.name === 'Aguardando' ? 'Pendentes' : 'Concluídos'}: ${data.value} (${percentage}%)`);
-                      }}
-                    >
-                      {[
-                        { name: 'Aguardando', value: pendingAppointments, color: '#FFD700' },
-                        { name: 'Concluídos', value: completedAppointments, color: '#4CAF50' }
-                      ].map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{ 
-                        backgroundColor: '#252B3B',
-                        border: '1px solid #F0B35B',
-                        borderRadius: '4px',
-                        padding: '8px',
-                        fontSize: '12px',
-                        color: '#F0B35B',
-                        maxWidth: '200px',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: '#FFD700',
-                        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)',
-                        zIndex: 1000
-                      }}
-                      formatter={(value, name) => [
-                        `${value} (${((Number(value) / totalAppointments) * 100).toFixed(1)}%)`,
-                        name === 'Aguardando' ? 'Pendentes' : 'Concluídos'
-                      ]}
-                      labelStyle={{ 
-                        color: '#F0B35B',
-                        fontWeight: 'bold',
-                        marginBottom: '4px',
-                        fontSize: '10px'
-                      }}
-                      wrapperStyle={{
-                        zIndex: 1000,
-                        maxWidth: '90vw',
-                        visibility: 'visible',
-                        position: 'absolute',
-                        top: 0,
-                        left: 0
-                      }}
-                      isAnimationActive={false}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+              <div className="p-3 bg-[#F0B35B]/10 rounded-full">
+                <FaChartLine className="text-[#F0B35B] text-xl" />
+              </div>
+            </div>
+            <div className="mt-4">
+              <div className="flex justify-between text-xs text-gray-400 mb-1">
+                <span>Pendentes</span>
+                <span>Concluídos</span>
+              </div>
+              <div className="w-full bg-gray-700 rounded-full h-2.5">
+                <div
+                  className="bg-[#F0B35B] h-2.5 rounded-full"
+                  style={{ width: `${taxaConclusao}%` }}
+                ></div>
+              </div>
+              <div className="flex justify-between text-xs mt-1">
+                <span className="text-gray-400">{pendingAppointments}</span>
+                <span className="text-gray-400">{completedAppointments}</span>
               </div>
             </div>
           </div>

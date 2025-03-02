@@ -7,11 +7,12 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { isAuthenticated } = useAuth();
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
+  // Removendo a verificação de autenticação para permitir acesso direto ao dashboard
+  // const { isAuthenticated } = useAuth();
+  // 
+  // if (!isAuthenticated) {
+  //   return <Navigate to="/login" replace />;
+  // }
 
   return <>{children}</>;
 };

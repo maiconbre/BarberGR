@@ -8,7 +8,7 @@ const RegisterPage: React.FC = () => {
   const [error, setError] = useState('');
   const [formData, setFormData] = useState({
     name: '',
-    email: '',
+    username: '',
     password: '',
     whatsapp: '',
     pix: ''
@@ -21,7 +21,7 @@ const RegisterPage: React.FC = () => {
   
     try {
       // Form validation
-      if (!formData.name.trim() || !formData.email.trim() || !formData.password || !formData.whatsapp.trim() || !formData.pix.trim()) {
+      if (!formData.name.trim() || !formData.username.trim() || !formData.password || !formData.whatsapp.trim() || !formData.pix.trim()) {
         setError('Por favor, preencha todos os campos corretamente');
         return;
       }
@@ -31,9 +31,9 @@ const RegisterPage: React.FC = () => {
         return;
       }
   
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(formData.email.trim())) {
-        setError('Por favor, insira um email válido');
+      const usernameRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!usernameRegex.test(formData.username.trim())) {
+        setError('Por favor, insira um username válido');
         return;
       }
   
@@ -108,16 +108,16 @@ const RegisterPage: React.FC = () => {
               />
             </div>
             <div>
-              <label htmlFor="email" className="sr-only">Email</label>
+              <label htmlFor="username" className="sr-only">username</label>
               <input
-                id="email"
-                name="email"
-                type="email"
+                id="username"
+                name="username"
+                type="username"
                 required
                 className="appearance-none relative block w-full px-3 py-2 border border-gray-700 placeholder-gray-500 text-white bg-[#0D121E] focus:outline-none focus:ring-[#F0B35B] focus:border-[#F0B35B] focus:z-10 sm:text-sm"
-                placeholder="Email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="username"
+                value={formData.username}
+                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
               />
             </div>
             <div>

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authenticateUser } from '../services/auth'
+import { authenticateUser, validateToken } from '../services/auth'
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -21,11 +21,14 @@ export const useAuth = () => {
   return context;
 };
 
-const SESSION_EXPIRY = 30 * 60 * 1000; // 30 minutes in milliseconds
+// Tempo de expiração do token em milissegundos (30 minutos)
+const SESSION_EXPIRY = 30 * 60 * 1000;
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
+  // Verificar se a sessão ainda é válida
   const checkSessionValidity = () => {
     const expiryTime = localStorage.getItem('sessionExpiry') || sessionStorage.getItem('sessionExpiry');
     if (!expiryTime) return false;
@@ -34,43 +37,82 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return currentTime < parseInt(expiryTime);
   };
 
-  const updateSessionExpiry = (storage: Storage) => {
+  // Atualizar o tempo de expiração da sessão
+  const updateSessionExpiry = (storage: Storage, token: string) => {
     const expiryTime = new Date().getTime() + SESSION_EXPIRY;
     storage.setItem('sessionExpiry', expiryTime.toString());
+    storage.setItem('authToken', token);
   };
 
   useEffect(() => {
-    const validateSession = () => {
-      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-      if (token && checkSessionValidity()) {
-        setIsAuthenticated(true);
-        // Update expiry time when session is still valid
-        if (localStorage.getItem('authToken')) {
-          updateSessionExpiry(localStorage);
-        } else if (sessionStorage.getItem('authToken')) {
-          updateSessionExpiry(sessionStorage);
+    const validateSession = async () => {
+      setIsLoading(true);
+      try {
+        // Verificar se existe um token
+        const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+        
+        if (!token || !checkSessionValidity()) {
+          setIsAuthenticated(false);
+          setIsLoading(false);
+          return;
         }
-      } else {
-        // Clear session if expired
+        
+        // Validar o token no servidor
+        const { user, newToken } = await validateToken(token);
+        
+        // Determinar qual storage está sendo usado
+        const storage = localStorage.getItem('authToken') ? localStorage : sessionStorage;
+        
+        // Atualizar o token e o tempo de expiração
+        updateSessionExpiry(storage, newToken);
+        
+        // Armazenar os dados do usuário
+        storage.setItem('user', JSON.stringify(user));
+        
+        // Se for um barbeiro, armazenar o ID
+        if (user.role === 'barber') {
+          storage.setItem('currentBarberId', user.id.toString());
+        }
+        
+        setIsAuthenticated(true);
+      } catch (error) {
+        console.error('Erro na validação da sessão:', error);
+        // Limpar dados da sessão inválida
         logout();
+      } finally {
+        setIsLoading(false);
       }
     };
 
     validateSession();
-    const interval = setInterval(validateSession, 60000); // Check every minute
+    
+    // Configurar um intervalo para validar o token periodicamente
+    const intervalId = setInterval(() => {
+      if (isAuthenticated) {
+        validateSession();
+      }
+    }, SESSION_EXPIRY / 2); // Validar na metade do tempo de expiração
+    
+    return () => clearInterval(intervalId);
+  }, [isAuthenticated]);
 
-    return () => clearInterval(interval);
-  }, []);
-
-  const login = async (email: string, password: string, rememberMe: boolean) => {
+  const login = async (username: string, password: string, rememberMe: boolean) => {
     try {
-      const user = await authenticateUser(email, password)
+      const user = await authenticateUser(username, password);
       const storage = rememberMe ? localStorage : sessionStorage;
       
+      // Obter o token da resposta (configurado no serviço de autenticação)
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      
+      // Armazenar dados do usuário
       storage.setItem('user', JSON.stringify(user));
-      storage.setItem('authToken', 'true');
-      updateSessionExpiry(storage);
+      
+      // Atualizar tempo de expiração
+      if (token) {
+        updateSessionExpiry(storage, token);
+      }
 
+      // Se for um barbeiro, armazenar o ID
       if (user.role === 'barber') {
         storage.setItem('currentBarberId', user.id.toString());
       }
@@ -94,6 +136,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     sessionStorage.removeItem('user');
     sessionStorage.removeItem('sessionExpiry');
   };
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center h-screen">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#F0B35B]"></div>
+    </div>;
+  }
 
   return (
     <AuthContext.Provider value={{ isAuthenticated, login, logout }}>

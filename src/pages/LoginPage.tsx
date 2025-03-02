@@ -54,7 +54,7 @@ const LoginPage: React.FC = () => {
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
               <label htmlFor="username" className="sr-only">
-                Username
+                username
               </label>
               <input
                 id="username"
@@ -62,7 +62,7 @@ const LoginPage: React.FC = () => {
                 type="text"
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-700 placeholder-gray-500 text-white bg-[#0D121E] rounded-t-md focus:outline-none focus:ring-[#F0B35B] focus:border-[#F0B35B] focus:z-10 sm:text-sm"
-                placeholder="Username"
+                placeholder="username"
                 value={formData.username}
                 onChange={(e) =>
                   setFormData({ ...formData, username: e.target.value })
