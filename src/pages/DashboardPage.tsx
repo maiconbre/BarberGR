@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
-import { FaChartLine, FaMoneyBillWave, FaChevronDown } from 'react-icons/fa';
+import { FaChartLine, FaMoneyBillWave, FaChevronDown, FaCalendarAlt, FaUser } from 'react-icons/fa';
 import AppointmentCardNew from '../components/AppointmentCardNew';
 
 interface Appointment {
@@ -32,6 +32,9 @@ const DashboardPage: React.FC = () => {
   const [isChartExpanded, setIsChartExpanded] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedWeek, setSelectedWeek] = useState<string>('current');
+  const appointmentsPerPage = 10;
 
   // Função centralizada para carregar os agendamentos, memoizada para evitar recriações desnecessárias
   const loadAppointments = useCallback(async () => {
@@ -178,7 +181,48 @@ const DashboardPage: React.FC = () => {
   };
 
   const { receitaHoje, ticketMedio, taxaConclusao } = calculateStats();
-  const filteredAppointments = showCompleted ? appointments : appointments.filter(app => app.status !== 'completed');
+  // Função para filtrar agendamentos por semana
+  const filterAppointmentsByWeek = useCallback((apps: Appointment[]) => {
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay());
+
+    switch (selectedWeek) {
+      case 'current':
+        return apps.filter(app => {
+          const appDate = new Date(app.date);
+          const endOfWeek = new Date(startOfWeek);
+          endOfWeek.setDate(startOfWeek.getDate() + 6);
+          return appDate >= startOfWeek && appDate <= endOfWeek;
+        });
+      case 'next':
+        const nextWeekStart = new Date(startOfWeek);
+        nextWeekStart.setDate(startOfWeek.getDate() + 7);
+        const nextWeekEnd = new Date(nextWeekStart);
+        nextWeekEnd.setDate(nextWeekStart.getDate() + 6);
+        return apps.filter(app => {
+          const appDate = new Date(app.date);
+          return appDate >= nextWeekStart && appDate <= nextWeekEnd;
+        });
+      case 'all':
+      default:
+        return apps;
+    }
+  }, [selectedWeek]);
+
+  // Filtragem combinada (status e semana)
+  const filteredAppointments = React.useMemo(() => {
+    const statusFiltered = showCompleted ? appointments : appointments.filter(app => app.status !== 'completed');
+    return filterAppointmentsByWeek(statusFiltered);
+  }, [appointments, showCompleted, filterAppointmentsByWeek]);
+
+  // Paginação
+  const totalPages = Math.ceil(filteredAppointments.length / appointmentsPerPage);
+  const indexOfLastAppointment = currentPage * appointmentsPerPage;
+  const indexOfFirstAppointment = indexOfLastAppointment - appointmentsPerPage;
+  const currentAppointments = filteredAppointments.slice(indexOfFirstAppointment, indexOfLastAppointment);
+
+  const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
 
   if (isLoading) {
     return (
@@ -207,7 +251,27 @@ const DashboardPage: React.FC = () => {
       <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-semibold text-white">Painel de Controle</h1>
+          <div className="flex items-center gap-4">
+            <h1 className="text-2xl font-semibold text-white">Painel de Controle</h1>
+            <div className="hidden sm:flex items-center gap-2 text-gray-400 text-sm">
+              <span>•</span>
+              <span>Bem-vindo</span>
+            </div>
+          </div>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+              localStorage.removeItem('token');
+              window.location.href = '/login';
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-500 rounded-md hover:bg-red-500/20 transition-all duration-300"
+          >
+            <span className="hidden sm:inline">Sair</span>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M3 3a1 1 0 011 1v12a1 1 0 11-2 0V4a1 1 0 011-1zm7.707 3.293a1 1 0 010 1.414L8.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
+          </motion.button>
         </div>
 
         {/* Cards de Estatísticas */}
@@ -281,8 +345,87 @@ const DashboardPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Calendário Diário */}
+        <div className="bg-gradient-to-br from-[#1A1F2E] to-[#252B3B] p-6 rounded-xl shadow-lg mb-8">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+              <FaCalendarAlt className="text-[#F0B35B]" />
+              Agendamentos do Dia
+            </h2>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setSelectedWeek('current')}
+                className={`px-3 py-1 rounded-md text-sm ${selectedWeek === 'current' ? 'bg-[#F0B35B] text-black' : 'bg-[#1A1F2E] text-white hover:bg-[#252B3B]'}`}
+              >
+                Semana Atual
+              </button>
+              <button
+                onClick={() => setSelectedWeek('next')}
+                className={`px-3 py-1 rounded-md text-sm ${selectedWeek === 'next' ? 'bg-[#F0B35B] text-black' : 'bg-[#1A1F2E] text-white hover:bg-[#252B3B]'}`}
+              >
+                Próxima Semana
+              </button>
+              <button
+                onClick={() => setSelectedWeek('all')}
+                className={`px-3 py-1 rounded-md text-sm ${selectedWeek === 'all' ? 'bg-[#F0B35B] text-black' : 'bg-[#1A1F2E] text-white hover:bg-[#252B3B]'}`}
+              >
+                Todas
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-12 gap-2 bg-[#1A1F2E] p-4 rounded-lg">
+            {Array.from({ length: 24 }, (_, i) => 
+              `${String(i).padStart(2, '0')}:00`
+            ).map(time => {
+              const appointment = appointments
+                .find(app => 
+                  app.date === new Date().toISOString().split('T')[0] && 
+                  app.time === time
+                );
+              
+              return (
+                <div
+                  key={time}
+                  className={`col-span-12 grid grid-cols-12 gap-2 p-2 rounded-lg ${appointment ? (appointment.status === 'completed' ? 'bg-green-500/10' : 'bg-[#1A1F2E]/50') : 'bg-[#1A1F2E]/20'}`}
+                >
+                  <div className="col-span-2 flex items-center">
+                    <span className="text-[#F0B35B] font-medium">{time}</span>
+                  </div>
+                  {appointment ? (
+                    <>
+                      <div className="col-span-3">
+                        <h3 className="text-white font-medium">{appointment.clientName}</h3>
+                      </div>
+                      <div className="col-span-3">
+                        <p className="text-gray-400 text-sm">{appointment.service}</p>
+                      </div>
+                      <div className="col-span-2 flex items-center">
+                        <span className="text-gray-400 text-sm flex items-center gap-1">
+                          <FaUser className="text-xs" /> {appointment.barberName}
+                        </span>
+                      </div>
+                      <div className="col-span-2 flex items-center justify-end gap-2">
+                        <span className="text-[#F0B35B] text-sm">R$ {appointment.price.toFixed(2)}</span>
+                        <div className={`px-2 py-1 rounded-full text-xs ${appointment.status === 'completed' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                          {appointment.status === 'completed' ? 'Concluído' : 'Pendente'}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="col-span-10 flex items-center">
+                      <span className="text-gray-500 text-sm">Horário Disponível</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
         {/* Seção do Gráfico */}
-        <motion.div 
+        <motion.div
           className="bg-gradient-to-br from-[#1A1F2E] to-[#252B3B] rounded-xl shadow-lg overflow-hidden mb-6"
           animate={{ height: isChartExpanded ? 'auto' : '80px' }}
           transition={{ duration: 0.3 }}
@@ -412,7 +555,7 @@ const DashboardPage: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredAppointments.map((appointment) => (
+          {currentAppointments.map((appointment) => (
             <motion.div
               key={appointment.id}
               layout
@@ -431,6 +574,21 @@ const DashboardPage: React.FC = () => {
             </motion.div>
           ))}
         </div>
+
+        {/* Paginação */}
+        {filteredAppointments.length > appointmentsPerPage && (
+          <div className="mt-6 flex justify-center gap-2">
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((number) => (
+              <button
+                key={number}
+                onClick={() => paginate(number)}
+                className={`px-3 py-1 rounded-md text-sm ${currentPage === number ? 'bg-[#F0B35B] text-black' : 'bg-[#1A1F2E] text-white hover:bg-[#252B3B]'}`}
+              >
+                {number}
+              </button>
+            ))}
+          </div>
+        )}
       </main>
     </div>
   );
