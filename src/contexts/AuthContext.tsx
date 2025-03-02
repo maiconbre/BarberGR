@@ -1,9 +1,16 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authenticateUser, validateToken } from '../services/auth'
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
+
+interface User {
+  id: number;
+  username: string;
+  name: string;
+  role: string;
+}
 
 interface AuthContextType {
   isAuthenticated: boolean;
-  login: (username: string, password: string, rememberMe: boolean) => Promise<boolean>;
+  user: User | null;
+  login: (username: string, password: string, rememberMe: boolean) => Promise<{ success: boolean; user: User }>;
   logout: () => void;
 }
 
@@ -11,141 +18,118 @@ interface AuthProviderProps {
   children: React.ReactNode;
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const useAuth = () => {
+export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error('useAuth deve ser usado dentro de um AuthProvider');
   }
   return context;
 };
 
-// Tempo de expiração do token em milissegundos (30 minutos)
-const SESSION_EXPIRY = 30 * 60 * 1000;
-
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!localStorage.getItem('token'));
+  const [user, setUser] = useState<User | null>(() => {
+    const storedUser = localStorage.getItem('user') || sessionStorage.getItem('user');
+    return storedUser ? JSON.parse(storedUser) : null;
+  });
 
-  // Verificar se a sessão ainda é válida
-  const checkSessionValidity = () => {
-    const expiryTime = localStorage.getItem('sessionExpiry') || sessionStorage.getItem('sessionExpiry');
-    if (!expiryTime) return false;
+  const logout = useCallback((): void => {
+    try {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('user');
 
-    const currentTime = new Date().getTime();
-    return currentTime < parseInt(expiryTime);
-  };
+      setUser(null);
+      setIsAuthenticated(false);
+    } catch (error) {
+      console.error('Erro ao fazer logout:', error);
+      throw new Error('Não foi possível realizar o logout. Tente novamente.');
+    }
+  }, []);
 
-  // Atualizar o tempo de expiração da sessão
-  const updateSessionExpiry = (storage: Storage, token: string) => {
-    const expiryTime = new Date().getTime() + SESSION_EXPIRY;
-    storage.setItem('sessionExpiry', expiryTime.toString());
-    storage.setItem('authToken', token);
-  };
+  const validateToken = useCallback(async (token: string): Promise<boolean> => {
+    try {
+      const response = await fetch('https://barber-backend-spm8.onrender.com/api/auth/validate-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+      return data.success;
+    } catch (error) {
+      console.error('Erro na validação do token:', error);
+      throw new Error('Erro ao validar sua sessão. Por favor, faça login novamente.');
+    }
+  }, []);
 
   useEffect(() => {
-    const validateSession = async () => {
-      setIsLoading(true);
-      try {
-        // Verificar se existe um token
-        const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-        
-        if (!token || !checkSessionValidity()) {
-          setIsAuthenticated(false);
-          setIsLoading(false);
-          return;
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (token) {
+      validateToken(token).then(isValid => {
+        if (!isValid) {
+          logout();
         }
+      }).catch(() => {
+        logout();
+      });
+    }
+  }, [logout, validateToken]);
+
+  const login = useCallback(async (username: string, password: string, rememberMe: boolean): Promise<{ success: boolean; user: User }> => {
+    try {
+      const response = await fetch('https://barber-backend-spm8.onrender.com/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Erro ao fazer login');
+      }
+
+      if (data.success && data.data.token) {
+        const { token, user } = data.data;
+        const storage = rememberMe ? localStorage : sessionStorage;
         
-        // Validar o token no servidor
-        const { user, newToken } = await validateToken(token);
-        
-        // Determinar qual storage está sendo usado
-        const storage = localStorage.getItem('authToken') ? localStorage : sessionStorage;
-        
-        // Atualizar o token e o tempo de expiração
-        updateSessionExpiry(storage, newToken);
-        
-        // Armazenar os dados do usuário
+        storage.setItem('token', token);
         storage.setItem('user', JSON.stringify(user));
         
-        // Se for um barbeiro, armazenar o ID
-        if (user.role === 'barber') {
-          storage.setItem('currentBarberId', user.id.toString());
-        }
-        
+        setUser(user);
         setIsAuthenticated(true);
-      } catch (error) {
-        console.error('Erro na validação da sessão:', error);
-        // Limpar dados da sessão inválida
-        logout();
-      } finally {
-        setIsLoading(false);
+        return { success: true, user };
       }
-    };
-
-    validateSession();
-    
-    // Configurar um intervalo para validar o token periodicamente
-    const intervalId = setInterval(() => {
-      if (isAuthenticated) {
-        validateSession();
-      }
-    }, SESSION_EXPIRY / 2); // Validar na metade do tempo de expiração
-    
-    return () => clearInterval(intervalId);
-  }, [isAuthenticated]);
-
-  const login = async (username: string, password: string, rememberMe: boolean) => {
-    try {
-      const user = await authenticateUser(username, password);
-      const storage = rememberMe ? localStorage : sessionStorage;
-      
-      // Obter o token da resposta (configurado no serviço de autenticação)
-      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-      
-      // Armazenar dados do usuário
-      storage.setItem('user', JSON.stringify(user));
-      
-      // Atualizar tempo de expiração
-      if (token) {
-        updateSessionExpiry(storage, token);
-      }
-
-      // Se for um barbeiro, armazenar o ID
-      if (user.role === 'barber') {
-        storage.setItem('currentBarberId', user.id.toString());
-      }
-
-      setIsAuthenticated(true);
-      return true;
+      throw new Error('Credenciais inválidas. Verifique seu username e senha.');
     } catch (error) {
       console.error('Erro no login:', error);
-      return false;
+      throw new Error(error instanceof Error ? error.message : 'Não foi possível realizar o login. Tente novamente.');
     }
-  };
+  }, []);
 
-  const logout = () => {
-    setIsAuthenticated(false);
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('currentBarberId');
-    localStorage.removeItem('user');
-    localStorage.removeItem('sessionExpiry');
-    sessionStorage.removeItem('authToken');
-    sessionStorage.removeItem('currentBarberId');
-    sessionStorage.removeItem('user');
-    sessionStorage.removeItem('sessionExpiry');
-  };
-
-  if (isLoading) {
-    return <div className="flex items-center justify-center h-screen">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#F0B35B]"></div>
-    </div>;
-  }
+  const contextValue = useMemo<AuthContextType>(
+    () => ({
+      isAuthenticated,
+      user,
+      login,
+      logout,
+    }),
+    [isAuthenticated, user, login, logout]
+  );
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
 };
+
+export { AuthContext };
